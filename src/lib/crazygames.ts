@@ -171,16 +171,23 @@ export function crazyGamesRequestRewardedAd(
         rewardGiven = true;
         onRewardGranted();
       },
-      adError: (error) => {
-        console.warn('🎁 Rewarded Ad Error or Domain Restriction:', error);
+      adError: (error: any) => {
+        console.warn('🎁 Rewarded Ad Error:', error);
         isAdPlaying = false;
         soundManager.setAdMuted(false);
 
         if (!rewardGiven) {
-          const isExternal = typeof window !== 'undefined' && !window.location.hostname.includes('crazygames');
-          const msg = isExternal
-            ? 'CrazyGames live ads only serve inside CrazyGames iframe.'
-            : 'Ad closed or unavailable.';
+          let errStr = typeof error === 'string' ? error : (error?.message || error?.code || JSON.stringify(error) || 'Ad unavailable');
+          if (errStr === '{}') errStr = 'Ad closed or unavailable';
+
+          const isCrazyIframe = window.self !== window.top;
+          let msg = `Ad Error (${errStr}).`;
+          if (isCrazyIframe) {
+            msg = `CrazyGames Ad Error: ${errStr}. (In QA Tool: ensure "Skip video" setting is OFF!)`;
+          } else {
+            msg = `Ad Error: ${errStr}. Live ads require published CrazyGames iframe.`;
+          }
+
           if (onError) {
             onError(msg, true);
           }
