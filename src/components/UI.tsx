@@ -6,10 +6,11 @@
 import { useState, useEffect } from 'react';
 import { useGameStore } from '../store/gameStore';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ExternalLink, Trophy, Sparkles, Play, ShieldAlert, Zap, RotateCw } from 'lucide-react';
+import { ExternalLink, Trophy, Sparkles, Play, ShieldAlert, Zap, RotateCw, Maximize, Minimize } from 'lucide-react';
 import { MobileControls } from './MobileControls';
 import { SkinSelector } from './SkinSelector';
 import { SKINS, getSelectedSkinId, getSkinById } from '../shared/skins';
+import { requestFullscreen, toggleFullscreen, isFullscreen } from '../lib/fullscreen';
 import {
   crazyGamesGameplayStart,
   crazyGamesGameplayStop,
@@ -62,8 +63,21 @@ export function UI() {
     }
   }, [isDead]);
 
+  const [isFs, setIsFs] = useState<boolean>(false);
+
+  useEffect(() => {
+    const handleFsChange = () => setIsFs(isFullscreen());
+    document.addEventListener('fullscreenchange', handleFsChange);
+    document.addEventListener('webkitfullscreenchange', handleFsChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFsChange);
+      document.removeEventListener('webkitfullscreenchange', handleFsChange);
+    };
+  }, []);
+
   const handleJoinGame = () => {
     try {
+      requestFullscreen();
       if (screen.orientation && 'lock' in screen.orientation) {
         (screen.orientation as any).lock('landscape').catch(() => {});
       }
@@ -204,6 +218,16 @@ export function UI() {
             <span className="font-bold bg-white/20 px-1.5 py-0.5 rounded text-white ml-2">SPACE</span>
             <span className="text-white/70 uppercase tracking-wider text-[10px]">Boost</span>
           </div>
+
+          {/* Fullscreen Button */}
+          <button
+            onClick={() => toggleFullscreen()}
+            className="flex items-center gap-1.5 px-3 py-1.5 sm:px-4 sm:py-2 bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 border border-cyan-500/40 backdrop-blur-md rounded-full text-xs sm:text-sm font-bold transition-all shadow-md active:scale-95"
+            title="Toggle Fullscreen"
+          >
+            {isFs ? <Minimize size={14} /> : <Maximize size={14} />}
+            <span className="hidden sm:inline">{isFs ? 'Exit Full' : 'Fullscreen'}</span>
+          </button>
 
           <button
             onClick={handleOpenNewTab}
