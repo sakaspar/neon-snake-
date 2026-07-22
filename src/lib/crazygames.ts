@@ -3,6 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
 */
 
+import { soundManager } from './soundManager';
+
 declare global {
   interface Window {
     CrazyGames?: {
@@ -14,6 +16,8 @@ declare global {
           loadingStart: () => void;
           loadingStop: () => void;
           happytime: () => void;
+          addAudioListener?: (listener: (audioState: any) => void) => void;
+          removeAudioListener?: (listener: (audioState: any) => void) => void;
         };
         ad: {
           requestAd: (
@@ -113,18 +117,23 @@ export function crazyGamesRequestMidrollAd(onComplete?: () => void) {
   }
 
   isAdPlaying = true;
+  soundManager.setAdMuted(true);
+
   window.CrazyGames.SDK.ad.requestAd('midroll', {
     adStarted: () => {
       console.log('📺 Midroll Ad Started');
+      soundManager.setAdMuted(true);
     },
     adFinished: () => {
       console.log('📺 Midroll Ad Finished');
       isAdPlaying = false;
+      soundManager.setAdMuted(false);
       if (onComplete) onComplete();
     },
     adError: (error) => {
       console.warn('📺 Midroll Ad Error:', error);
       isAdPlaying = false;
+      soundManager.setAdMuted(false);
       if (onComplete) onComplete();
     },
   });
@@ -132,15 +141,15 @@ export function crazyGamesRequestMidrollAd(onComplete?: () => void) {
 
 export function crazyGamesRequestRewardedAd(
   onRewardGranted: () => void,
-  onError?: (errMessage: string) => void
+  onError?: (errMessage: string, canFallback?: boolean) => void
 ) {
   if (isAdPlaying) {
-    if (onError) onError('An ad is already playing.');
+    if (onError) onError('An ad is already playing.', false);
     return;
   }
 
   if (!window.CrazyGames?.SDK?.ad) {
-    console.log('CrazyGames SDK not present, auto-granting reward in dev mode.');
+    console.log('CrazyGames SDK not present, granting reward directly.');
     onRewardGranted();
     return;
   }
@@ -148,24 +157,44 @@ export function crazyGamesRequestRewardedAd(
   isAdPlaying = true;
   let rewardGiven = false;
 
-  window.CrazyGames.SDK.ad.requestAd('rewarded', {
-    adStarted: () => {
-      console.log('🎁 Rewarded Ad Started');
-    },
-    adFinished: () => {
-      console.log('🎁 Rewarded Ad Finished - Awarding item!');
-      isAdPlaying = false;
-      rewardGiven = true;
-      onRewardGranted();
-    },
-    adError: (error) => {
-      console.warn('🎁 Rewarded Ad Error or Closed Early:', error);
-      isAdPlaying = false;
-      if (!rewardGiven && onError) {
-        onError('Ad was closed or failed to play.');
-      }
-    },
-  });
+  try {
+    soundManager.setAdMuted(true);
+    window.CrazyGames.SDK.ad.requestAd('rewarded', {
+      adStarted: () => {
+        console.log('🎁 Rewarded Ad Started');
+        soundManager.setAdMuted(true);
+      },
+      adFinished: () => {
+        console.log('🎁 Rewarded Ad Finished - Awarding item!');
+        isAdPlaying = false;
+        soundManager.setAdMuted(false);
+        rewardGiven = true;
+        onRewardGranted();
+      },
+      adError: (error) => {
+        console.warn('🎁 Rewarded Ad Error or Domain Restriction:', error);
+        isAdPlaying = false;
+        soundManager.setAdMuted(false);
+
+        if (!rewardGiven) {
+          const isExternal = typeof window !== 'undefined' && !window.location.hostname.includes('crazygames');
+          const msg = isExternal
+            ? 'CrazyGames live ads only serve inside CrazyGames iframe.'
+            : 'Ad closed or unavailable.';
+          if (onError) {
+            onError(msg, true);
+          }
+        }
+      },
+    });
+  } catch (err) {
+    console.error('Error requesting CrazyGames rewarded ad:', err);
+    isAdPlaying = false;
+    soundManager.setAdMuted(false);
+    if (onError) {
+      onError('CrazyGames Ad error on external domain.', true);
+    }
+  }
 }
 
 export function crazyGamesSaveData(key: string, value: string) {
@@ -194,5 +223,27 @@ export function crazyGamesGetData(key: string): string | null {
     return localStorage.getItem(key);
   } catch {
     return null;
+  }
+}
+
+export function crazyGamesAddAudioListener(listener: (audioState: any) => void) {
+  try {
+    if (window.CrazyGames?.SDK?.game?.addAudioListener) {
+      window.CrazyGames.SDK.game.addAudioListener(listener);
+      console.log('🔈 Registered CrazyGames Audio Listener');
+    }
+  } catch (err) {
+    console.error('Error registering CrazyGames audio listener:', err);
+  }
+}
+
+export function crazyGamesRemoveAudioListener(listener: (audioState: any) => void) {
+  try {
+    if (window.CrazyGames?.SDK?.game?.removeAudioListener) {
+      window.CrazyGames.SDK.game.removeAudioListener(listener);
+      console.log('🔇 Removed CrazyGames Audio Listener');
+    }
+  } catch (err) {
+    console.error('Error removing CrazyGames audio listener:', err);
   }
 }

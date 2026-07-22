@@ -12,6 +12,7 @@ import * as THREE from 'three';
 import { Sphere, Grid } from '@react-three/drei';
 
 import { getSkinById } from '../shared/skins';
+import { soundManager } from '../lib/soundManager';
 
 const localCollectedOrbs = new Set<string>();
 
@@ -387,6 +388,7 @@ export function GameScene() {
           localCollectedOrbs.add(orbId);
           delete gs.orbs[orbId]; // predict locally
           sendCollectOrb(orbId);
+          soundManager.playEatSound();
         }
       }
 
@@ -416,6 +418,7 @@ export function GameScene() {
 
       if (collided) {
         localPlayerRef.current.active = false;
+        soundManager.playDeathSound();
         sendPlayerState({
           segments: localPlayerRef.current.segments,
           score: localPlayerRef.current.score,

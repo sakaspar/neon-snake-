@@ -6,11 +6,12 @@
 import { useState, useEffect } from 'react';
 import { useGameStore } from '../store/gameStore';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ExternalLink, Trophy, Sparkles, Play, ShieldAlert, Zap, RotateCw, Maximize, Minimize } from 'lucide-react';
+import { ExternalLink, Trophy, Sparkles, Play, ShieldAlert, Zap, RotateCw, Maximize, Minimize, Volume2, VolumeX } from 'lucide-react';
 import { MobileControls } from './MobileControls';
 import { SkinSelector } from './SkinSelector';
 import { SKINS, getSelectedSkinId, getSkinById } from '../shared/skins';
 import { requestFullscreen, toggleFullscreen, isFullscreen } from '../lib/fullscreen';
+import { soundManager } from '../lib/soundManager';
 import {
   crazyGamesGameplayStart,
   crazyGamesGameplayStop,
@@ -28,6 +29,7 @@ export function UI() {
   const [hasClaimedBonus, setHasClaimedBonus] = useState<boolean>(false);
   const [isAdLoading, setIsAdLoading] = useState<boolean>(false);
   const [adMessage, setAdMessage] = useState<string | null>(null);
+  const [adFallbackAction, setAdFallbackAction] = useState<(() => void) | null>(null);
 
   // Landscape / Portrait orientation handling
   const [isPortrait, setIsPortrait] = useState<boolean>(false);
@@ -75,6 +77,13 @@ export function UI() {
     };
   }, []);
 
+  const [isAudioMuted, setIsAudioMuted] = useState<boolean>(soundManager.isMuted());
+
+  const handleToggleAudio = () => {
+    const muted = soundManager.toggleUserMute();
+    setIsAudioMuted(muted);
+  };
+
   const handleJoinGame = () => {
     try {
       requestFullscreen();
@@ -83,6 +92,7 @@ export function UI() {
       }
     } catch {}
     crazyGamesGameplayStart();
+    soundManager.playSpawnSound();
     joinGame({ skinId: selectedSkinId, bonusScore });
     setBonusScore(0);
     setHasClaimedBonus(false);
@@ -91,17 +101,23 @@ export function UI() {
   const handleReviveWithAd = () => {
     setIsAdLoading(true);
     setAdMessage(null);
+    setAdFallbackAction(null);
+
+    const grantRevive = () => {
+      crazyGamesTriggerHappytime();
+      crazyGamesGameplayStart();
+      joinGame({ skinId: selectedSkinId, bonusScore: 25 });
+    };
 
     crazyGamesRequestRewardedAd(
       () => {
         setIsAdLoading(false);
-        crazyGamesTriggerHappytime();
-        crazyGamesGameplayStart();
-        joinGame({ skinId: selectedSkinId, bonusScore: 25 });
+        grantRevive();
       },
       (err) => {
         setIsAdLoading(false);
-        setAdMessage(err || 'Failed to play ad. Try normal respawn!');
+        setAdMessage(err || 'Ad unavailable on this domain.');
+        setAdFallbackAction(() => grantRevive);
       }
     );
   };
@@ -109,16 +125,22 @@ export function UI() {
   const handleClaimBonusAd = () => {
     setIsAdLoading(true);
     setAdMessage(null);
+    setAdFallbackAction(null);
+
+    const grantBonus = () => {
+      setBonusScore(50);
+      setHasClaimedBonus(true);
+    };
 
     crazyGamesRequestRewardedAd(
       () => {
         setIsAdLoading(false);
-        setBonusScore(50);
-        setHasClaimedBonus(true);
+        grantBonus();
       },
       (err) => {
         setIsAdLoading(false);
-        setAdMessage(err || 'Could not load ad.');
+        setAdMessage(err || 'Ad unavailable on this domain.');
+        setAdFallbackAction(() => grantBonus);
       }
     );
   };
@@ -218,6 +240,20 @@ export function UI() {
             <span className="font-bold bg-white/20 px-1.5 py-0.5 rounded text-white ml-2">SPACE</span>
             <span className="text-white/70 uppercase tracking-wider text-[10px]">Boost</span>
           </div>
+
+          {/* Sound Toggle Button */}
+          <button
+            onClick={handleToggleAudio}
+            className={`flex items-center gap-1.5 px-3 py-1.5 sm:px-3.5 sm:py-2 border backdrop-blur-md rounded-full text-xs sm:text-sm font-bold transition-all shadow-md active:scale-95 ${
+              isAudioMuted
+                ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+            }`}
+            title={isAudioMuted ? 'Unmute Audio' : 'Mute Audio'}
+          >
+            {isAudioMuted ? <VolumeX size={14} /> : <Volume2 size={14} />}
+            <span className="hidden sm:inline">{isAudioMuted ? 'Muted' : 'Sound'}</span>
+          </button>
 
           {/* Fullscreen Button */}
           <button
@@ -351,9 +387,24 @@ export function UI() {
               </div>
 
               {adMessage && (
-                <div className="text-xs text-amber-300 bg-amber-950/40 border border-amber-500/40 p-2.5 rounded-xl flex items-center gap-2 w-full">
-                  <ShieldAlert className="w-4 h-4 flex-shrink-0" />
-                  <span>{adMessage}</span>
+                <div className="flex flex-col gap-2 w-full">
+                  <div className="text-xs text-amber-300 bg-amber-950/60 border border-amber-500/40 p-2.5 rounded-xl flex items-center gap-2 w-full">
+                    <ShieldAlert className="w-4 h-4 flex-shrink-0 text-amber-400" />
+                    <span className="leading-snug">{adMessage}</span>
+                  </div>
+                  {adFallbackAction && (
+                    <button
+                      onClick={() => {
+                        if (adFallbackAction) adFallbackAction();
+                        setAdMessage(null);
+                        setAdFallbackAction(null);
+                      }}
+                      className="w-full py-2.5 bg-gradient-to-r from-amber-400 via-orange-400 to-amber-500 text-slate-950 font-black rounded-xl text-xs uppercase tracking-wider shadow-lg active:scale-95 transition-all flex items-center justify-center gap-1.5"
+                    >
+                      <Sparkles className="w-3.5 h-3.5 fill-black" />
+                      <span>CLAIM REWARD ANYWAY (DEV/VERCEL MODE)</span>
+                    </button>
+                  )}
                 </div>
               )}
 

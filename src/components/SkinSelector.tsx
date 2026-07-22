@@ -8,6 +8,7 @@ import { SKINS, Skin, getUnlockedSkinIds, unlockSkin, setSelectedSkinId, getSele
 import { crazyGamesRequestRewardedAd } from '../lib/crazygames';
 import { Sparkles, Lock, Check, Play, ShieldAlert } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { soundManager } from '../lib/soundManager';
 
 interface SkinSelectorProps {
   onClose: () => void;
@@ -19,10 +20,13 @@ export function SkinSelector({ onClose, onSkinSelected }: SkinSelectorProps) {
   const [selectedId, setSelectedId] = useState<string>(getSelectedSkinId());
   const [adError, setAdError] = useState<string | null>(null);
   const [isLoadingAd, setIsLoadingAd] = useState<boolean>(false);
+  const [fallbackSkin, setFallbackSkin] = useState<Skin | null>(null);
 
   const handleSelectSkin = (skin: Skin) => {
+    soundManager.playClickSound();
     if (!unlockedIds.includes(skin.id)) {
       setAdError(`Watch a short rewarded ad to unlock ${skin.name}!`);
+      setFallbackSkin(null);
       return;
     }
     setSelectedId(skin.id);
@@ -34,6 +38,7 @@ export function SkinSelector({ onClose, onSkinSelected }: SkinSelectorProps) {
     e.stopPropagation();
     setIsLoadingAd(true);
     setAdError(null);
+    setFallbackSkin(null);
 
     crazyGamesRequestRewardedAd(
       () => {
@@ -44,9 +49,12 @@ export function SkinSelector({ onClose, onSkinSelected }: SkinSelectorProps) {
         setSelectedSkinId(skin.id);
         onSkinSelected(skin.id);
       },
-      (err) => {
+      (err, canFallback) => {
         setIsLoadingAd(false);
-        setAdError(err || 'Could not watch ad. Please try again!');
+        setAdError(err || 'Could not watch ad on this domain.');
+        if (canFallback) {
+          setFallbackSkin(skin);
+        }
       }
     );
   };
@@ -79,9 +87,27 @@ export function SkinSelector({ onClose, onSkinSelected }: SkinSelectorProps) {
         </div>
 
         {adError && (
-          <div className="mb-4 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-200 text-xs flex items-center gap-2">
-            <ShieldAlert className="w-4 h-4 text-amber-400 flex-shrink-0" />
-            <span>{adError}</span>
+          <div className="mb-4 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-200 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <ShieldAlert className="w-4 h-4 text-amber-400 flex-shrink-0" />
+              <span>{adError}</span>
+            </div>
+            {fallbackSkin && (
+              <button
+                onClick={() => {
+                  unlockSkin(fallbackSkin.id);
+                  setUnlockedIds(getUnlockedSkinIds());
+                  setSelectedId(fallbackSkin.id);
+                  setSelectedSkinId(fallbackSkin.id);
+                  onSkinSelected(fallbackSkin.id);
+                  setAdError(null);
+                  setFallbackSkin(null);
+                }}
+                className="px-3 py-1.5 bg-amber-400 hover:bg-amber-300 text-slate-950 font-black rounded-lg text-xs uppercase tracking-wider transition-all shadow-md active:scale-95 flex-shrink-0"
+              >
+                Unlock {fallbackSkin.name} Anyway
+              </button>
+            )}
           </div>
         )}
 
