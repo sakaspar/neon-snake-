@@ -51,29 +51,41 @@ declare global {
 
 let isInitialized = false;
 let isAdPlaying = false;
+let initPromise: Promise<boolean> | null = null;
 
 export async function initCrazyGames(): Promise<boolean> {
   if (isInitialized) return true;
+  if (initPromise) return initPromise;
 
-  try {
-    if (window.CrazyGames?.SDK) {
-      await window.CrazyGames.SDK.init();
-      isInitialized = true;
-      console.log('🎮 CrazyGames SDK v3 Initialized successfully!');
-      return true;
-    } else {
-      console.warn('CrazyGames SDK script not found, running in standalone mode.');
+  initPromise = (async () => {
+    try {
+      if (window.CrazyGames?.SDK) {
+        await window.CrazyGames.SDK.init();
+        isInitialized = true;
+        console.log('🎮 CrazyGames SDK v3 Initialized successfully!');
+        return true;
+      } else {
+        console.warn('CrazyGames SDK script not found, running in standalone mode.');
+        return false;
+      }
+    } catch (err) {
+      console.error('Failed to initialize CrazyGames SDK:', err);
       return false;
     }
-  } catch (err) {
-    console.error('Failed to initialize CrazyGames SDK:', err);
-    return false;
-  }
+  })();
+
+  return initPromise;
 }
 
-export function crazyGamesGameplayStart() {
+// Automatically start SDK initialization as soon as module loads
+if (typeof window !== 'undefined') {
+  initCrazyGames().catch(() => {});
+}
+
+export async function crazyGamesGameplayStart() {
+  await initCrazyGames();
   try {
-    if (window.CrazyGames?.SDK?.game) {
+    if (isInitialized && window.CrazyGames?.SDK?.game) {
       window.CrazyGames.SDK.game.gameplayStart();
       console.log('🎮 CrazyGames: gameplayStart()');
     }
@@ -82,9 +94,10 @@ export function crazyGamesGameplayStart() {
   }
 }
 
-export function crazyGamesGameplayStop() {
+export async function crazyGamesGameplayStop() {
+  await initCrazyGames();
   try {
-    if (window.CrazyGames?.SDK?.game) {
+    if (isInitialized && window.CrazyGames?.SDK?.game) {
       window.CrazyGames.SDK.game.gameplayStop();
       console.log('🎮 CrazyGames: gameplayStop()');
     }
@@ -93,9 +106,10 @@ export function crazyGamesGameplayStop() {
   }
 }
 
-export function crazyGamesTriggerHappytime() {
+export async function crazyGamesTriggerHappytime() {
+  await initCrazyGames();
   try {
-    if (window.CrazyGames?.SDK?.game) {
+    if (isInitialized && window.CrazyGames?.SDK?.game) {
       window.CrazyGames.SDK.game.happytime();
       console.log('🎉 CrazyGames: happytime() triggered!');
     }
@@ -104,13 +118,15 @@ export function crazyGamesTriggerHappytime() {
   }
 }
 
-export function crazyGamesRequestMidrollAd(onComplete?: () => void) {
+export async function crazyGamesRequestMidrollAd(onComplete?: () => void) {
   if (isAdPlaying) {
     if (onComplete) onComplete();
     return;
   }
 
-  if (!window.CrazyGames?.SDK?.ad) {
+  await initCrazyGames();
+
+  if (!isInitialized || !window.CrazyGames?.SDK?.ad) {
     console.log('CrazyGames SDK not present, skipping midroll ad.');
     if (onComplete) onComplete();
     return;
@@ -139,7 +155,7 @@ export function crazyGamesRequestMidrollAd(onComplete?: () => void) {
   });
 }
 
-export function crazyGamesRequestRewardedAd(
+export async function crazyGamesRequestRewardedAd(
   onRewardGranted: () => void,
   onError?: (errMessage: string, canFallback?: boolean) => void
 ) {
@@ -148,7 +164,9 @@ export function crazyGamesRequestRewardedAd(
     return;
   }
 
-  if (!window.CrazyGames?.SDK?.ad) {
+  await initCrazyGames();
+
+  if (!isInitialized || !window.CrazyGames?.SDK?.ad) {
     console.log('CrazyGames SDK not present, granting reward directly.');
     onRewardGranted();
     return;
@@ -206,7 +224,7 @@ export function crazyGamesRequestRewardedAd(
 
 export function crazyGamesSaveData(key: string, value: string) {
   try {
-    if (window.CrazyGames?.SDK?.data) {
+    if (isInitialized && window.CrazyGames?.SDK?.data) {
       window.CrazyGames.SDK.data.setItem(key, value);
     }
   } catch (err) {
@@ -219,7 +237,7 @@ export function crazyGamesSaveData(key: string, value: string) {
 
 export function crazyGamesGetData(key: string): string | null {
   try {
-    if (window.CrazyGames?.SDK?.data) {
+    if (isInitialized && window.CrazyGames?.SDK?.data) {
       const val = window.CrazyGames.SDK.data.getItem(key);
       if (val !== null) return val;
     }
@@ -233,9 +251,10 @@ export function crazyGamesGetData(key: string): string | null {
   }
 }
 
-export function crazyGamesAddAudioListener(listener: (audioState: any) => void) {
+export async function crazyGamesAddAudioListener(listener: (audioState: any) => void) {
+  await initCrazyGames();
   try {
-    if (window.CrazyGames?.SDK?.game?.addAudioListener) {
+    if (isInitialized && window.CrazyGames?.SDK?.game?.addAudioListener) {
       window.CrazyGames.SDK.game.addAudioListener(listener);
       console.log('🔈 Registered CrazyGames Audio Listener');
     }
@@ -244,9 +263,10 @@ export function crazyGamesAddAudioListener(listener: (audioState: any) => void) 
   }
 }
 
-export function crazyGamesRemoveAudioListener(listener: (audioState: any) => void) {
+export async function crazyGamesRemoveAudioListener(listener: (audioState: any) => void) {
+  await initCrazyGames();
   try {
-    if (window.CrazyGames?.SDK?.game?.removeAudioListener) {
+    if (isInitialized && window.CrazyGames?.SDK?.game?.removeAudioListener) {
       window.CrazyGames.SDK.game.removeAudioListener(listener);
       console.log('🔇 Removed CrazyGames Audio Listener');
     }

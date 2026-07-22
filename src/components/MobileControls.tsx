@@ -5,7 +5,7 @@
 
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { mobileInputState } from '../store/inputStore';
-import { Zap, Shield, Navigation, ArrowLeft, ArrowRight } from 'lucide-react';
+import { Zap, Shield, Navigation } from 'lucide-react';
 
 interface JoystickPos {
   active: boolean;
@@ -28,24 +28,58 @@ export function MobileControls() {
 
   const [isBoostActive, setIsBoostActive] = useState(false);
   const [isBrakeActive, setIsBrakeActive] = useState(false);
-  const [isLeftActive, setIsLeftActive] = useState(false);
-  const [isRightActive, setIsRightActive] = useState(false);
 
-  const leftZoneRef = useRef<HTMLDivElement>(null);
+  const dragZoneRef = useRef<HTMLDivElement>(null);
   const touchIdRef = useRef<number | null>(null);
+  const isMouseDownRef = useRef<boolean>(false);
 
-  const maxRadius = 45; // max joystick knob distance
+  const maxRadius = 50; // max joystick knob distance
+
+  // Process coordinates relative to drag zone
+  const updateJoystickPosition = useCallback((clientX: number, clientY: number, baseX: number, baseY: number) => {
+    const dx = clientX - baseX;
+    const dy = clientY - baseY;
+    const dist = Math.hypot(dx, dy);
+
+    if (dist < 4) {
+      mobileInputState.joystickActive = false;
+      setJoystick((prev) => ({ ...prev, knobX: 0, knobY: 0 }));
+      return;
+    }
+
+    const clampedDist = Math.min(dist, maxRadius);
+    const angleRadDOM = Math.atan2(dy, dx);
+
+    const knobX = Math.cos(angleRadDOM) * clampedDist;
+    const knobY = Math.sin(angleRadDOM) * clampedDist;
+
+    // Convert DOM coordinate angle (y goes down) to 3D game angle (y goes up)
+    const gameAngleRad = Math.atan2(-dy, dx);
+
+    mobileInputState.joystickActive = true;
+    mobileInputState.joystickAngle = gameAngleRad;
+
+    const angleDeg = (gameAngleRad * 180) / Math.PI;
+
+    setJoystick({
+      active: true,
+      baseX,
+      baseY,
+      knobX,
+      knobY,
+      angleDeg,
+    });
+  }, []);
 
   // Touch handlers for virtual joystick
   const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
-    e.preventDefault();
     if (touchIdRef.current !== null) return;
 
     const touch = e.changedTouches[0];
-    if (!touch || !leftZoneRef.current) return;
+    if (!touch || !dragZoneRef.current) return;
 
     touchIdRef.current = touch.identifier;
-    const rect = leftZoneRef.current.getBoundingClientRect();
+    const rect = dragZoneRef.current.getBoundingClientRect();
     const x = touch.clientX - rect.left;
     const y = touch.clientY - rect.top;
 
@@ -62,8 +96,7 @@ export function MobileControls() {
   };
 
   const handleTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    if (touchIdRef.current === null || !leftZoneRef.current) return;
+    if (touchIdRef.current === null || !dragZoneRef.current) return;
 
     let touch: React.Touch | null = null;
     for (let i = 0; i < e.changedTouches.length; i++) {
@@ -74,43 +107,11 @@ export function MobileControls() {
     }
     if (!touch) return;
 
-    const rect = leftZoneRef.current.getBoundingClientRect();
+    const rect = dragZoneRef.current.getBoundingClientRect();
     const currentX = touch.clientX - rect.left;
     const currentY = touch.clientY - rect.top;
 
-    setJoystick((prev) => {
-      if (!prev.active) return prev;
-
-      const dx = currentX - prev.baseX;
-      const dy = currentY - prev.baseY;
-      const dist = Math.hypot(dx, dy);
-
-      if (dist < 5) {
-        mobileInputState.joystickActive = false;
-        return { ...prev, knobX: 0, knobY: 0 };
-      }
-
-      const clampedDist = Math.min(dist, maxRadius);
-      const angleRadDOM = Math.atan2(dy, dx);
-
-      const knobX = Math.cos(angleRadDOM) * clampedDist;
-      const knobY = Math.sin(angleRadDOM) * clampedDist;
-
-      // Convert DOM coordinate angle (y goes down) to 3D game angle (y goes up)
-      const gameAngleRad = Math.atan2(-dy, dx);
-
-      mobileInputState.joystickActive = true;
-      mobileInputState.joystickAngle = gameAngleRad;
-
-      const angleDeg = (gameAngleRad * 180) / Math.PI;
-
-      return {
-        ...prev,
-        knobX,
-        knobY,
-        angleDeg,
-      };
-    });
+    updateJoystickPosition(currentX, currentY, joystick.baseX, joystick.baseY);
   };
 
   const handleTouchEnd = (e: React.TouchEvent<HTMLDivElement>) => {
@@ -124,27 +125,39 @@ export function MobileControls() {
     }
   };
 
-  // Direct Button Steer Handlers
-  const handleLeftDown = (e: React.SyntheticEvent) => {
-    e.preventDefault();
-    setIsLeftActive(true);
-    mobileInputState.left = true;
-  };
-  const handleLeftUp = (e: React.SyntheticEvent) => {
-    e.preventDefault();
-    setIsLeftActive(false);
-    mobileInputState.left = false;
+  // Mouse drag fallback for desktop / preview testing
+  const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!dragZoneRef.current) return;
+    isMouseDownRef.current = true;
+    const rect = dragZoneRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    setJoystick({
+      active: true,
+      baseX: x,
+      baseY: y,
+      knobX: 0,
+      knobY: 0,
+      angleDeg: 0,
+    });
   };
 
-  const handleRightDown = (e: React.SyntheticEvent) => {
-    e.preventDefault();
-    setIsRightActive(true);
-    mobileInputState.right = true;
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!isMouseDownRef.current || !dragZoneRef.current) return;
+    const rect = dragZoneRef.current.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    updateJoystickPosition(x, y, joystick.baseX, joystick.baseY);
   };
-  const handleRightUp = (e: React.SyntheticEvent) => {
-    e.preventDefault();
-    setIsRightActive(false);
-    mobileInputState.right = false;
+
+  const handleMouseUp = () => {
+    if (isMouseDownRef.current) {
+      isMouseDownRef.current = false;
+      setJoystick((prev) => ({ ...prev, active: false, knobX: 0, knobY: 0 }));
+      mobileInputState.joystickActive = false;
+    }
   };
 
   // Boost button handlers
@@ -188,14 +201,18 @@ export function MobileControls() {
 
   return (
     <div className="absolute inset-0 pointer-events-none select-none touch-none z-30 overflow-hidden">
-      {/* Left Touch Joystick Zone */}
+      {/* Touch / Drag Steering Zone */}
       <div
-        ref={leftZoneRef}
+        ref={dragZoneRef}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
         onTouchCancel={handleTouchEnd}
-        className="absolute left-0 top-0 bottom-0 w-1/2 pointer-events-auto touch-none"
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}
+        className="absolute left-0 top-0 bottom-0 w-[70%] sm:w-[75%] pointer-events-auto touch-none cursor-grab active:cursor-grabbing"
       >
         {/* Dynamic / Static Joystick Render */}
         {joystick.active ? (
@@ -204,66 +221,41 @@ export function MobileControls() {
             style={{ left: `${joystick.baseX}px`, top: `${joystick.baseY}px` }}
           >
             {/* Base Ring */}
-            <div className="w-24 h-24 rounded-full border-2 border-cyan-400/60 bg-cyan-950/50 backdrop-blur-md shadow-[0_0_25px_rgba(34,211,238,0.4)] flex items-center justify-center relative">
+            <div className="w-24 h-24 rounded-full border-2 border-cyan-400/70 bg-cyan-950/60 backdrop-blur-md shadow-[0_0_30px_rgba(34,211,238,0.5)] flex items-center justify-center relative">
               <div
                 className="absolute w-full h-full flex items-center justify-center transition-transform duration-75"
                 style={{ transform: `rotate(${-joystick.angleDeg}deg)` }}
               >
-                <Navigation className="text-cyan-400 w-4 h-4 absolute right-1 rotate-90" />
+                <Navigation className="text-cyan-400 w-5 h-5 absolute right-1 rotate-90 drop-shadow-[0_0_8px_rgba(34,211,238,0.8)]" />
               </div>
 
               {/* Moveable Knob */}
               <div
-                className="w-10 h-10 rounded-full bg-gradient-to-br from-cyan-400 to-blue-600 border border-white shadow-[0_0_15px_rgba(34,211,238,0.9)] flex items-center justify-center"
+                className="w-11 h-11 rounded-full bg-gradient-to-br from-cyan-400 to-blue-600 border-2 border-white shadow-[0_0_20px_rgba(34,211,238,1)] flex items-center justify-center"
                 style={{
                   transform: `translate(${joystick.knobX}px, ${joystick.knobY}px)`,
                 }}
               >
-                <div className="w-3 h-3 rounded-full bg-white shadow-inner" />
+                <div className="w-3.5 h-3.5 rounded-full bg-white shadow-inner" />
               </div>
             </div>
           </div>
         ) : (
           /* Default resting indicator */
-          <div className="absolute left-4 bottom-14 pointer-events-none opacity-40">
-            <div className="w-20 h-20 rounded-full border border-dashed border-cyan-400/40 bg-cyan-950/20 flex items-center justify-center relative animate-pulse">
-              <Navigation className="text-cyan-300 w-4 h-4" />
+          <div className="absolute left-6 bottom-8 pointer-events-none opacity-50 flex items-center gap-2">
+            <div className="w-14 h-14 rounded-full border border-dashed border-cyan-400/50 bg-cyan-950/30 flex items-center justify-center relative animate-pulse">
+              <Navigation className="text-cyan-300 w-5 h-5" />
             </div>
-            <span className="block mt-1 text-[9px] font-mono font-bold text-cyan-300/80 uppercase tracking-wider text-center">
-              DRAG TO STEER
-            </span>
+            <div className="flex flex-col">
+              <span className="text-xs font-black font-mono text-cyan-300 uppercase tracking-widest drop-shadow">
+                DRAG TO STEER
+              </span>
+              <span className="text-[10px] text-cyan-200/70 font-semibold">
+                Touch anywhere on left screen
+              </span>
+            </div>
           </div>
         )}
-      </div>
-
-      {/* On-Screen Arrow Steering Buttons (Left Bottom Corner override) */}
-      <div className="absolute left-3 bottom-3 flex items-center gap-2 pointer-events-auto touch-none">
-        <button
-          onTouchStart={handleLeftDown}
-          onTouchEnd={handleLeftUp}
-          onMouseDown={handleLeftDown}
-          onMouseUp={handleLeftUp}
-          className={`w-12 h-12 rounded-2xl flex items-center justify-center border transition-all active:scale-90 ${
-            isLeftActive
-              ? 'bg-cyan-500 border-white text-slate-950 shadow-[0_0_20px_rgba(34,211,238,0.8)] scale-95'
-              : 'bg-slate-950/70 border-cyan-500/40 text-cyan-300 backdrop-blur-md'
-          }`}
-        >
-          <ArrowLeft className="w-6 h-6 stroke-[3]" />
-        </button>
-        <button
-          onTouchStart={handleRightDown}
-          onTouchEnd={handleRightUp}
-          onMouseDown={handleRightDown}
-          onMouseUp={handleRightUp}
-          className={`w-12 h-12 rounded-2xl flex items-center justify-center border transition-all active:scale-90 ${
-            isRightActive
-              ? 'bg-cyan-500 border-white text-slate-950 shadow-[0_0_20px_rgba(34,211,238,0.8)] scale-95'
-              : 'bg-slate-950/70 border-cyan-500/40 text-cyan-300 backdrop-blur-md'
-          }`}
-        >
-          <ArrowRight className="w-6 h-6 stroke-[3]" />
-        </button>
       </div>
 
       {/* Right Action Buttons Area */}
