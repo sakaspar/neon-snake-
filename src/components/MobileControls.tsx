@@ -227,7 +227,7 @@ export function MobileControls() {
       </div>
 
       {/* Right Action Buttons Area */}
-      <div className="absolute right-4 bottom-6 flex items-end gap-4 pointer-events-auto touch-none">
+      <div className="absolute right-3 sm:right-6 bottom-3 sm:bottom-6 flex items-end gap-2.5 sm:gap-4 pointer-events-auto touch-none">
         {/* BRAKE / PRECISION BUTTON */}
         <div className="flex flex-col items-center gap-1">
           <button
@@ -235,14 +235,14 @@ export function MobileControls() {
             onPointerUp={handleBrakeUp}
             onPointerLeave={handleBrakeUp}
             onPointerCancel={handleBrakeUp}
-            className={`w-16 h-16 rounded-full flex flex-col items-center justify-center border-2 transition-all duration-100 active:scale-90 ${
+            className={`w-14 h-14 sm:w-16 sm:h-16 rounded-full flex flex-col items-center justify-center border-2 transition-all duration-100 active:scale-90 ${
               isBrakeActive
                 ? 'bg-blue-600 border-cyan-300 shadow-[0_0_25px_rgba(59,130,246,0.9)] scale-95'
                 : 'bg-gradient-to-br from-blue-900/80 to-slate-900/80 border-cyan-500/50 shadow-[0_0_15px_rgba(6,182,212,0.3)] backdrop-blur-md'
             }`}
           >
-            <Shield className={`w-6 h-6 ${isBrakeActive ? 'text-white' : 'text-cyan-300'}`} />
-            <span className="text-[9px] font-black tracking-wider text-cyan-200 mt-0.5 uppercase">
+            <Shield className={`w-5 h-5 sm:w-6 sm:h-6 ${isBrakeActive ? 'text-white' : 'text-cyan-300'}`} />
+            <span className="text-[8px] sm:text-[9px] font-black tracking-wider text-cyan-200 mt-0.5 uppercase">
               BRAKE
             </span>
           </button>
@@ -255,14 +255,14 @@ export function MobileControls() {
             onPointerUp={handleBoostUp}
             onPointerLeave={handleBoostUp}
             onPointerCancel={handleBoostUp}
-            className={`w-20 h-20 rounded-full flex flex-col items-center justify-center border-2 transition-all duration-100 active:scale-90 ${
+            className={`w-16 h-16 sm:w-20 sm:h-20 rounded-full flex flex-col items-center justify-center border-2 transition-all duration-100 active:scale-90 ${
               isBoostActive
                 ? 'bg-gradient-to-tr from-amber-500 to-rose-500 border-yellow-200 shadow-[0_0_35px_rgba(245,158,11,1)] scale-95'
                 : 'bg-gradient-to-tr from-amber-600/80 to-orange-950/80 border-amber-400/60 shadow-[0_0_20px_rgba(245,158,11,0.4)] backdrop-blur-md'
             }`}
           >
-            <Zap className={`w-8 h-8 ${isBoostActive ? 'text-yellow-100 animate-bounce' : 'text-amber-300'}`} />
-            <span className="text-[10px] font-black tracking-widest text-amber-100 uppercase">
+            <Zap className={`w-6 h-6 sm:w-8 sm:h-8 ${isBoostActive ? 'text-yellow-100 animate-bounce' : 'text-amber-300'}`} />
+            <span className="text-[9px] sm:text-[10px] font-black tracking-widest text-amber-100 uppercase">
               BOOST
             </span>
           </button>
